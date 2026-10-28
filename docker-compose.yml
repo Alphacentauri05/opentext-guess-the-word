@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  # -------------------------------------------------------------
+  # Database Service (PostgreSQL 16 Alpine - Secure & Lightweight)
+  # -------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: opentext_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword123
+      POSTGRES_DB: opentext_guess_word
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d opentext_guess_word"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # Backend API Service (FastAPI + Non-Root User + Auto Migration)
+  # -------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: opentext_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespassword123@db:5432/opentext_guess_word
+      SECRET_KEY: opentext_enterprise_secure_secret_key_2026_demo
+      ENVIRONMENT: production
+      APP_TIMEZONE: UTC
+      CORS_ORIGINS: '["*"]'
+    ports:
+      - "8000:8000"
+
+  # -------------------------------------------------------------
+  # Frontend Service (React 19 + TypeScript + Nginx Reverse Proxy)
+  # -------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: opentext_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "5173:80"
+
+volumes:
+  postgres_data:
+    driver: local
